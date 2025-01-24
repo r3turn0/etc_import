@@ -1,0 +1,9 @@
+# Node.js
+node_modules/
+
+# Environment variables
+.env*
+
+# log files
+log.txt
+staging_log.txt
