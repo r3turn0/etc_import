@@ -177,10 +177,12 @@ async function getStagingDataTypes() {
         const results = await client.query(selectQuery);
         if(results.rows.length !== 0) {
             console.log('The Staging Data Types:', results.rows);
+            // grab the first row for values 
             const values = Object.values(results.rows[0]);
             for(var i = 0; i < values.length; i++){
                 let value = values[i];
-                if(value !== '' && value !== null) {
+                let header = results.fields[i].name;
+                if(value !== '' && value !== null && header.match(/name/) === null) {
                     if (!isNaN(value)) {
                         if (Number(value) % 1 === 0) {
                             dataTypes.push('NUMERIC');
@@ -196,8 +198,7 @@ async function getStagingDataTypes() {
                     } else {
                         dataTypes.push('VARCHAR');
                     }
-                }
-                else {
+                } else {
                     dataTypes.push('VARCHAR');
                 }
             }
@@ -258,7 +259,8 @@ async function transformColumns(headers) {
             const values = Object.values(results.rows[0]);
             for(var i = 0; i < values.length; i++){
                 let value = values[i];
-                if(value !== '' && value !== null) {
+                let header = results.fields[i].name;
+                if(value !== '' && value !== null && header.match(/name/) === null) {
                     if (!isNaN(value)) {
                         if (Number(value) % 1 === 0) {
                             headers[i] = `CASE WHEN ${headers[i]} = '' OR ${headers[i]} IS NULL THEN 0 ELSE ${headers[i]}::numeric END`;
