@@ -4,6 +4,7 @@ const { Client } = require('pg');
 const csv = require('fast-csv');
 const nodemailer = require('nodemailer');
 require('dotenv').config();
+
 const DIRECTORY_PATH = process.argv[4]
 const CSV_FILE_PATH = path.join(__dirname, DIRECTORY_PATH);
 let UUID = '';
@@ -152,6 +153,7 @@ async function insertStagingData(headers, data, file) {
                             'Message: ' + mailOptions.text + ' Number of records: ' + selectCountQuery.rows[0].c;
         } catch (error) {
             await client.query('ROLLBACK');
+            await client.end();
             console.error('Error inserting data to table: ' + STAGING, error);
             console.log('Error inserting data to table: ' + STAGING, error);
             mailOptions.subject = mailOptions.subject + STAGING + ' error';
@@ -161,7 +163,6 @@ async function insertStagingData(headers, data, file) {
                                'Date: ' + DATE + '<br><br>' +
                                'Uploaded By:' + UPLOADED_BY + '<br><br>' +
                                 'Message: '+ mailOptions.text;
-            await client.end();
         } finally {
             sendEmail(mailOptions);
             // Create Table with field types
@@ -319,6 +320,7 @@ async function insertTableData(headers, file) {
                             'Message: ' + mailOptions.text + ' Number of records: ' + count;
     } catch (error) {
         await client.query('ROLLBACK');
+        await client.end();
         console.error('Error inserting data to table: ' + TABLE, error);
         console.log('Error inserting data to table: ' + TABLE, error);
         mailOptions.subject = 'IMPORT: ' + TABLE + ' error';
@@ -328,10 +330,78 @@ async function insertTableData(headers, file) {
                             'Date: ' + DATE + '<br><br>' +
                             'Uploaded By:' + UPLOADED_BY + '<br><br>' +
                             'Message: ' + mailOptions.text;
-        await client.end();
     } finally {
-        await client.end();
         sendEmail(mailOptions);
+        importDocuments(file);
+    }
+}
+
+async function importDocuments(file) {
+    //await client.connect();
+    const fileName = file;
+    const firstName = UPLOADED_BY.split(' ')[0];
+    const lastName = UPLOADED_BY.split(' ')[1];
+    const load_id = UUID;
+    const date_upload = DATE;
+    const uploaded_by = UPLOADED_BY;
+    console.log('Uploading file:', fileName, 'Load ID:', load_id);
+    try {
+        const getUserQuery = `SELECT uid FROM etc.user WHERE first_name LIKE $1 AND last_name LIKE $2`;
+        const resultUser = await client.query(getUserQuery, [firstName, lastName]);
+        const resultUserId = resultUser.rows[0].uid;
+        console.log('User: ', resultUser, ' ID:', resultUserId);
+        const query = `INSERT INTO etc.upload (filename, date_upload, uid, uploaded_by, filepath, load_id) 
+        VALUES ($1, $2, $3, $4, $5, $6)`;
+        const values = [file, date_upload, resultUserId, uploaded_by, DESTINATION_PATH + '\\' + file, load_id];
+        const results = await client.query(query, values);
+        console.log('Document inserted: ', results);
+        const subject = 'IMPORT etc.upload';
+        let text = 'Hello ' + firstName + ' ' + lastName + ' uid: ' + resultUserId + ', File load_id: ' + load_id + ' with filename: ' + fileName + ' was successfully imported into the etc.upload table on ' + date_upload + '. Regards, \n' + uploaded_by;
+        let html = '<h1>Uploaded File</h1><p>' + 
+            text + '</p>' + 
+            '<p> Load Id: ' + 
+            load_id  + 
+            '</p>' + 
+            '<p> Filename: ' + 
+            fileName  + 
+            '</p>' + 
+            '<p> Uploaded By: ' + 
+            uploaded_by  + 
+            '</p>' + 
+            '<p> Date Upload: ' + 
+            date_upload  + 
+            '</p>';
+        mailOptions.subject = subject;
+        mailOptions.text = text;
+        mailOptions.html = html;
+        sendEmail(mailOptions);
+    }
+    catch(e) {
+        await client.end();
+        console.error('Error inserting document:', fileName);
+        const subject = 'IMPORT etc.upload error';
+        let text = 'Error inserting document: ' + fileName;
+        let html = '<h1>Uploaded File</h1><p>' + 
+            text + '</p>' + 
+            '<p> Load Id: ' + 
+            load_id  + 
+            '</p>' + 
+            '<p> Filename: ' + 
+            fileName  + 
+            '</p>' + 
+            '<p> Uploaded By: ' + 
+            uploaded_by  + 
+            '</p>' + 
+            '<p> Date Upload: ' + 
+            date_upload  + 
+            '</p>';
+        mailOptions.subject = subject;
+        mailOptions.text = text;
+        mailOptions.html = html;
+        sendEmail(mailOptions);
+    }
+    finally {
+        await client.end();
     }
 }
 
