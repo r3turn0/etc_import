@@ -1,5 +1,7 @@
 # Node.js
 node_modules/
+csv/
+output_csv/
 
 # Environment variables
 .env*
