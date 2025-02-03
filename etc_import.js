@@ -184,7 +184,13 @@ async function getStagingDataTypes() {
             for(var i = 0; i < values.length; i++){
                 let value = values[i];
                 let header = results.fields[i].name;
-                if(value !== '' && value !== null && header.match(/name/) === null) {
+                if(header.match(/name/) !== null) {
+                    dataTypes.push('VARCHAR');
+                }
+                else if (header === 'id'){
+                    dataTypes.push('SERIAL')
+                }
+                else if(value !== '' && value !== null) {
                     if (!isNaN(value)) {
                         if (Number(value) % 1 === 0) {
                             dataTypes.push('NUMERIC');
@@ -201,12 +207,7 @@ async function getStagingDataTypes() {
                         dataTypes.push('VARCHAR');
                     }
                 } else {
-                    if(header === 'id') {
-                        dataTypes.push('SERIAL');
-                    }
-                    else {
-                        dataTypes.push('VARCHAR');
-                    }
+                    dataTypes.push('VARCHAR');
                 }
             }
             return dataTypes;
@@ -219,10 +220,11 @@ async function getStagingDataTypes() {
     }
 }
 
+
 // Give headers data field types
 async function transformHeaders(headers, datatypes){
     // Map headers[] and dataTypes[] to header + ' ' + datatypes
-    return headers.map((header, index) => `${header} ${datatypes[index]}`).join(', ');
+    return headers.map((header, index) => `${header} ${header === 'id' ? 'SERIAL' : datatypes[index]}`).join(', ');
 }
 
 async function createTable(headers, file) {
@@ -267,30 +269,29 @@ async function transformColumns(headers) {
             for(var i = 0; i < values.length; i++){
                 let value = values[i];
                 let header = results.fields[i].name;
-                if(value !== '' && value !== null && header.match(/name/) === null) {
+                if(value !== '' && value !== null) {
                     if (!isNaN(value)) {
                         if (Number(value) % 1 === 0) {
-                            headers[i] = `CASE WHEN ${headers[i]} = '' OR ${headers[i]} IS NULL THEN 0 ELSE ${headers[i]}::numeric END`;
+                            headers[i] = ` CASE WHEN ${headers[i]} = '' OR ${headers[i]} IS NULL THEN 0 ELSE ${headers[i]}::numeric END`;
                         } else {
-                            headers[i] = `CASE WHEN ${headers[i]} = '' OR ${headers[i]} IS NULL THEN 0.0 ELSE ${headers[i]}::float END`;
+                            headers[i] = ` CASE WHEN ${headers[i]} = '' OR ${headers[i]} IS NULL THEN 0.0 ELSE ${headers[i]}::float END`;
                         }
                     } else if (!isNaN(Date.parse(value))) {
-                        headers[i] = `CASE WHEN ${headers[i]} = '' OR ${headers[i]} IS NULL THEN NULL ELSE CAST(${headers[i]} AS TIMESTAMP) END`;
+                        headers[i] = ` CASE WHEN ${headers[i]} = '' OR ${headers[i]} IS NULL THEN NULL ELSE CAST(${headers[i]} AS TIMESTAMP) END`;
                     } else if (value.toLowerCase() === 'true' || value.toLowerCase() === 't' || value.toLowerCase() === 'false' || value.toLowerCase() === 'f') {
-                        headers[i] = `CASE WHEN ${headers[i]} = '' OR ${headers[i]} IS NULL THEN CAST(${headers[i]} AS BOOLEAN) ELSE ${headers[i]}::boolean END`;
+                        headers[i] = ` CASE WHEN ${headers[i]} = '' OR ${headers[i]} IS NULL THEN CAST(${headers[i]} AS BOOLEAN) ELSE ${headers[i]}::boolean END`;
                     } else if (/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(value)) {
-                        headers[i] = `CAST(${headers[i]} AS UUID)`;
+                        headers[i] = ` CAST(${headers[i]} AS UUID)`;
                     } else {
-                        headers[i] = headers[i];
+                        headers[i] = ' ' + headers[i];
                     }
                 }
                 else {
-                    // remove the id column 
                     if(header === 'id') {
-                        //headers.pop();
+                        headers[i] = ` CASE WHEN "id" IS NULL OR "id" = '' THEN nextval('etc.id_seq') ELSE "id"::INTEGER END`;
                     }
                     else {
-                        headers[i] = headers[i];
+                        headers[i] = ' ' + headers[i];
                     }
                 }
             }
@@ -310,11 +311,11 @@ async function insertTableData(headers, file) {
         //await client.connect();
         await client.query('BEGIN');
         // remove the id column
-        let alteredHeaders = headers;
-        alteredHeaders.pop();
-        let insertQuery = `INSERT INTO ` + TABLE + ` (${alteredHeaders.join(', ')}) `;
+        //let alteredHeaders = headers;
+        //alteredHeaders.pop();
+        let insertQuery = `INSERT INTO ` + TABLE + ` (${headers.join(', ')}) `;
         const selectedColumns = await transformColumns(headers);
-        const selectQuery = `SELECT ${selectedColumns} FROM ${STAGING}`;
+        const selectQuery = `SELECT${selectedColumns} FROM ${STAGING}`;
         insertQuery += selectQuery;
         console.log('THE INSERT TABLE QUERY:', insertQuery);
         await client.query(insertQuery)
