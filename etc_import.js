@@ -69,7 +69,7 @@ async function parseCSV(file) {
             headerList.forEach(function(header) {
                 HEADERS.push(header.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '').toLowerCase())
             });
-            HEADERS.push('filename', 'load_id', 'date_upload', 'uploaded_by', 'id');
+            HEADERS.push('filename', 'load_id', 'date_upload', 'uploaded_by', 'running_id');
             console.log('Headers:', HEADERS);
         })
         .on('data', (row) => {
@@ -187,7 +187,7 @@ async function getStagingDataTypes() {
                 if(header.match(/name/) !== null) {
                     dataTypes.push('VARCHAR');
                 }
-                else if (header === 'id'){
+                else if (header === 'running_id'){
                     dataTypes.push('SERIAL')
                 }
                 else if(value !== '' && value !== null) {
@@ -224,7 +224,7 @@ async function getStagingDataTypes() {
 // Give headers data field types
 async function transformHeaders(headers, datatypes){
     // Map headers[] and dataTypes[] to header + ' ' + datatypes
-    return headers.map((header, index) => `${header} ${header === 'id' ? 'SERIAL' : datatypes[index]}`).join(', ');
+    return headers.map((header, index) => `${header} ${header === 'running_id' ? 'SERIAL' : datatypes[index]}`).join(', ');
 }
 
 async function createTable(headers, file) {
@@ -287,7 +287,7 @@ async function transformColumns(headers) {
                     }
                 }
                 else {
-                    if(header === 'id') {
+                    if(header === 'running_id') {
                         headers[i] = ` CASE WHEN "id" IS NULL OR "id" = '' THEN nextval('etc.id_seq') ELSE "id"::INTEGER END`;
                     }
                     else {
