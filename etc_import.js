@@ -5,16 +5,23 @@ const csv = require('fast-csv');
 const nodemailer = require('nodemailer');
 require('dotenv').config();
 
-const DIRECTORY_PATH = process.argv[4]
-const CSV_FILE_PATH = path.join(__dirname, DIRECTORY_PATH);
+// GLOBAL VARIABLES
 let UUID = '';
 let HEADERS = [];
 const DATA = [];
 const DATE = new Date().toISOString();
 const UPLOADED_BY = process.env.UPLOADED_BY;
 const STAGING = process.argv[2];
-const TABLE = process.argv[3];
-const DESTINATION_PATH = process.argv[5];
+//const TABLE = process.argv[3];
+
+// Changed directory path to argument 3
+//const DIRECTORY_PATH = process.argv[4]
+const DIRECTORY_PATH = process.argv[3]
+const CSV_FILE_PATH = path.join(__dirname, DIRECTORY_PATH);
+
+// Changed the destination path to arguement 4
+//const DESTINATION_PATH = process.argv[5];
+const DESTINATION_PATH = process.argv[4]
 
 // Create a new client for PostgreSQL database
 const client = new Client({
@@ -166,191 +173,193 @@ async function insertStagingData(headers, data, file) {
                                 'Message: '+ mailOptions.text;
         } finally {
             sendEmail(mailOptions);
+            // Removed the second table creation and insert. Replaced with importDocuments.
+            importDocuments(file);
             // Create Table with field types
-            createTable(headers, file);
+            //createTable(headers, file);
         }
 }
 
-async function getStagingDataTypes() {
-    let dataTypes = [];
-    try {
-        //await client.connect();
-        const selectQuery = `SELECT * FROM ` + STAGING + ` LIMIT 1`;
-        const results = await client.query(selectQuery);
-        if(results.rows.length !== 0) {
-            console.log('The Staging Data Types:', results.rows);
-            // grab the first row for values 
-            const values = Object.values(results.rows[0]);
-            for(var i = 0; i < values.length; i++){
-                let value = values[i];
-                let header = results.fields[i].name;
-                if(header.match(/name/) !== null) {
-                    dataTypes.push('VARCHAR');
-                }
-                else if (header === 'id'){
-                    dataTypes.push('SERIAL')
-                }
-                else if(value !== '' && value !== null) {
-                    if (!isNaN(value)) {
-                        if (Number(value) % 1 === 0) {
-                            dataTypes.push('NUMERIC');
-                        } else {
-                            dataTypes.push('FLOAT');
-                        }
-                    } else if (!isNaN(Date.parse(value))) {
-                        dataTypes.push('TIMESTAMP');
-                    } else if (value.toLowerCase() === 'true' || value.toLowerCase() === 't' || value.toLowerCase() === 'false' || value.toLowerCase() === 'f') {
-                        dataTypes.push('BOOLEAN');
-                    } else if (/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(value)) {
-                        dataTypes.push('UUID');
-                    } else {
-                        dataTypes.push('VARCHAR');
-                    }
-                } else {
-                    dataTypes.push('VARCHAR');
-                }
-            }
-            return dataTypes;
-        }
-    }
-    catch(error) {
-        await client.end();
-        console.error('Error getting staging data', error);
-        console.log('Error getting staging data', error)
-    }
-}
+// async function getStagingDataTypes() {
+//     let dataTypes = [];
+//     try {
+//         //await client.connect();
+//         const selectQuery = `SELECT * FROM ` + STAGING + ` LIMIT 1`;
+//         const results = await client.query(selectQuery);
+//         if(results.rows.length !== 0) {
+//             console.log('The Staging Data Types:', results.rows);
+//             // grab the first row for values 
+//             const values = Object.values(results.rows[0]);
+//             for(var i = 0; i < values.length; i++){
+//                 let value = values[i];
+//                 let header = results.fields[i].name;
+//                 if(header.match(/name/) !== null) {
+//                     dataTypes.push('VARCHAR');
+//                 }
+//                 else if (header === 'id'){
+//                     dataTypes.push('SERIAL')
+//                 }
+//                 else if(value !== '' && value !== null) {
+//                     if (!isNaN(value)) {
+//                         if (Number(value) % 1 === 0) {
+//                             dataTypes.push('NUMERIC');
+//                         } else {
+//                             dataTypes.push('FLOAT');
+//                         }
+//                     } else if (!isNaN(Date.parse(value))) {
+//                         dataTypes.push('TIMESTAMP');
+//                     } else if (value.toLowerCase() === 'true' || value.toLowerCase() === 't' || value.toLowerCase() === 'false' || value.toLowerCase() === 'f') {
+//                         dataTypes.push('BOOLEAN');
+//                     } else if (/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(value)) {
+//                         dataTypes.push('UUID');
+//                     } else {
+//                         dataTypes.push('VARCHAR');
+//                     }
+//                 } else {
+//                     dataTypes.push('VARCHAR');
+//                 }
+//             }
+//             return dataTypes;
+//         }
+//     }
+//     catch(error) {
+//         await client.end();
+//         console.error('Error getting staging data', error);
+//         console.log('Error getting staging data', error)
+//     }
+// }
 
 
-// Give headers data field types
-async function transformHeaders(headers, datatypes){
-    // Map headers[] and dataTypes[] to header + ' ' + datatypes
-    return headers.map((header, index) => `${header} ${header === 'id' ? 'SERIAL' : datatypes[index]}`).join(', ');
-}
+// // Give headers data field types
+// async function transformHeaders(headers, datatypes){
+//     // Map headers[] and dataTypes[] to header + ' ' + datatypes
+//     return headers.map((header, index) => `${header} ${header === 'id' ? 'SERIAL' : datatypes[index]}`).join(', ');
+// }
 
-async function createTable(headers, file) {
-    try {
-        const selectQuery = `SELECT to_regclass('`+TABLE+`')`;
-        const result = await client.query(selectQuery);
-        if(result.rows[0].to_regclass) {
-            insertTableData(headers, file);
-        }
-        else {
-            try {
-                const dataTypes = await getStagingDataTypes();
-                const columns = await transformHeaders(headers, dataTypes);
-                const createQuery = `CREATE TABLE IF NOT EXISTS ` + TABLE + ` (${columns})`;
-                console.log('CREATE TABLE QUERY:', createQuery);
-                await client.query(createQuery);
-                console.log(TABLE, 'table created successfully');
-                insertTableData(headers, file);
-            } catch (error) {
-                await client.end();
-                console.error('Error creating table:', TABLE + '. ' + error);
-                console.log('Error creating table:', TABLE + '. ' + error);
-            }
-        }
-    }
-    catch (error) {
-        await client.end();
-        console.error('Error checking table:', TABLE + '. ' + error);
-        console.log('Error checking table:', TABLE + '. ' + error);
-    }
-}
+// async function createTable(headers, file) {
+//     try {
+//         const selectQuery = `SELECT to_regclass('`+TABLE+`')`;
+//         const result = await client.query(selectQuery);
+//         if(result.rows[0].to_regclass) {
+//             insertTableData(headers, file);
+//         }
+//         else {
+//             try {
+//                 const dataTypes = await getStagingDataTypes();
+//                 const columns = await transformHeaders(headers, dataTypes);
+//                 const createQuery = `CREATE TABLE IF NOT EXISTS ` + TABLE + ` (${columns})`;
+//                 console.log('CREATE TABLE QUERY:', createQuery);
+//                 await client.query(createQuery);
+//                 console.log(TABLE, 'table created successfully');
+//                 insertTableData(headers, file);
+//             } catch (error) {
+//                 await client.end();
+//                 console.error('Error creating table:', TABLE + '. ' + error);
+//                 console.log('Error creating table:', TABLE + '. ' + error);
+//             }
+//         }
+//     }
+//     catch (error) {
+//         await client.end();
+//         console.error('Error checking table:', TABLE + '. ' + error);
+//         console.log('Error checking table:', TABLE + '. ' + error);
+//     }
+// }
 
-async function transformColumns(headers) {
-    try {
-        //await client.connect();
-        // Get the data from staging table
-        const selectQuery = `SELECT * FROM ` + STAGING + ` LIMIT 1`;
-        const results = await client.query(selectQuery);
-        if(results.rows.length !== 0) {
-            console.log('The Staging Data:', results.rows);
-            const values = Object.values(results.rows[0]);
-            for(var i = 0; i < values.length; i++){
-                let value = values[i];
-                let header = results.fields[i].name;
-                if(value !== '' && value !== null) {
-                    if (!isNaN(value)) {
-                        if (Number(value) % 1 === 0) {
-                            headers[i] = ` CASE WHEN ${headers[i]} = '' OR ${headers[i]} IS NULL THEN 0 ELSE ${headers[i]}::numeric END`;
-                        } else {
-                            headers[i] = ` CASE WHEN ${headers[i]} = '' OR ${headers[i]} IS NULL THEN 0.0 ELSE ${headers[i]}::float END`;
-                        }
-                    } else if (!isNaN(Date.parse(value))) {
-                        headers[i] = ` CASE WHEN ${headers[i]} = '' OR ${headers[i]} IS NULL THEN NULL ELSE CAST(${headers[i]} AS TIMESTAMP) END`;
-                    } else if (value.toLowerCase() === 'true' || value.toLowerCase() === 't' || value.toLowerCase() === 'false' || value.toLowerCase() === 'f') {
-                        headers[i] = ` CASE WHEN ${headers[i]} = '' OR ${headers[i]} IS NULL THEN CAST(${headers[i]} AS BOOLEAN) ELSE ${headers[i]}::boolean END`;
-                    } else if (/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(value)) {
-                        headers[i] = ` CAST(${headers[i]} AS UUID)`;
-                    } else {
-                        headers[i] = ' ' + headers[i];
-                    }
-                }
-                else {
-                    if(header === 'id') {
-                        headers[i] = ` CASE WHEN "id" IS NULL OR "id" = '' THEN nextval('etc.id_seq') ELSE "id"::INTEGER END`;
-                    }
-                    else {
-                        headers[i] = ' ' + headers[i];
-                    }
-                }
-            }
-            return headers;
-        }
-    }
-    catch(error) {
-        await client.end();
-        console.error('Error getting staging data', error);
-        console.log('Error getting staging data', error)
-    }
-}
+// async function transformColumns(headers) {
+//     try {
+//         //await client.connect();
+//         // Get the data from staging table
+//         const selectQuery = `SELECT * FROM ` + STAGING + ` LIMIT 1`;
+//         const results = await client.query(selectQuery);
+//         if(results.rows.length !== 0) {
+//             console.log('The Staging Data:', results.rows);
+//             const values = Object.values(results.rows[0]);
+//             for(var i = 0; i < values.length; i++){
+//                 let value = values[i];
+//                 let header = results.fields[i].name;
+//                 if(value !== '' && value !== null) {
+//                     if (!isNaN(value)) {
+//                         if (Number(value) % 1 === 0) {
+//                             headers[i] = ` CASE WHEN ${headers[i]} = '' OR ${headers[i]} IS NULL THEN 0 ELSE ${headers[i]}::numeric END`;
+//                         } else {
+//                             headers[i] = ` CASE WHEN ${headers[i]} = '' OR ${headers[i]} IS NULL THEN 0.0 ELSE ${headers[i]}::float END`;
+//                         }
+//                     } else if (!isNaN(Date.parse(value))) {
+//                         headers[i] = ` CASE WHEN ${headers[i]} = '' OR ${headers[i]} IS NULL THEN NULL ELSE CAST(${headers[i]} AS TIMESTAMP) END`;
+//                     } else if (value.toLowerCase() === 'true' || value.toLowerCase() === 't' || value.toLowerCase() === 'false' || value.toLowerCase() === 'f') {
+//                         headers[i] = ` CASE WHEN ${headers[i]} = '' OR ${headers[i]} IS NULL THEN CAST(${headers[i]} AS BOOLEAN) ELSE ${headers[i]}::boolean END`;
+//                     } else if (/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(value)) {
+//                         headers[i] = ` CAST(${headers[i]} AS UUID)`;
+//                     } else {
+//                         headers[i] = ' ' + headers[i];
+//                     }
+//                 }
+//                 else {
+//                     if(header === 'id') {
+//                         headers[i] = ` CASE WHEN "id" IS NULL OR "id" = '' THEN nextval('etc.id_seq') ELSE "id"::INTEGER END`;
+//                     }
+//                     else {
+//                         headers[i] = ' ' + headers[i];
+//                     }
+//                 }
+//             }
+//             return headers;
+//         }
+//     }
+//     catch(error) {
+//         await client.end();
+//         console.error('Error getting staging data', error);
+//         console.log('Error getting staging data', error)
+//     }
+// }
 
-// a function to insert data into the database
-async function insertTableData(headers, file) {
-    try {
-        //await client.connect();
-        await client.query('BEGIN');
-        // remove the id column
-        //let alteredHeaders = headers;
-        //alteredHeaders.pop();
-        let insertQuery = `INSERT INTO ` + TABLE + ` (${headers.join(', ')}) `;
-        const selectedColumns = await transformColumns(headers);
-        const selectQuery = `SELECT${selectedColumns} FROM ${STAGING}`;
-        insertQuery += selectQuery;
-        console.log('THE INSERT TABLE QUERY:', insertQuery);
-        await client.query(insertQuery)
-        await client.query('COMMIT');
-        console.log('Data inserted successfully');
-        const selectTableInfo = await client.query(`SELECT COUNT(*) as c, filename, load_id, date_upload, uploaded_by FROM ` + TABLE + ` where load_id = '` + UUID + `' GROUP BY filename, load_id, date_upload, uploaded_by`);
-        const file = selectTableInfo.rows[0].filename;
-        const load_id = selectTableInfo.rows[0].load_id;
-        const date_upload = selectTableInfo.rows[0].date_upload;
-        const uploaded_by = selectTableInfo.rows[0].uploaded_by; 
-        const count = selectTableInfo.rows[0].c;
-        mailOptions.subject = 'IMPORT: ' + TABLE;
-        mailOptions.text = 'Data imported successfully.';
-        mailOptions.html = 'Filename: ' + file + '<br><br>' +
-                            'Load ID: ' + load_id + '<br><br>' +
-                            'Date: ' + date_upload + '<br><br>' +
-                            'Uploaded By:' + uploaded_by + '<br><br>' +
-                            'Message: ' + mailOptions.text + ' Number of records: ' + count;
-    } catch (error) {
-        await client.query('ROLLBACK');
-        await client.end();
-        console.error('Error inserting data to table: ' + TABLE, error);
-        console.log('Error inserting data to table: ' + TABLE, error);
-        mailOptions.subject = 'IMPORT: ' + TABLE + ' error';
-        mailOptions.text = 'Error importing data: ' + error;
-        mailOptions.html = 'Filename: ' + file + '<br><br>' +
-                            'Load ID: ' + UUID + '<br><br>' +
-                            'Date: ' + DATE + '<br><br>' +
-                            'Uploaded By:' + UPLOADED_BY + '<br><br>' +
-                            'Message: ' + mailOptions.text;
-    } finally {
-        sendEmail(mailOptions);
-        importDocuments(file);
-    }
-}
+// // a function to insert data into the database
+// async function insertTableData(headers, file) {
+//     try {
+//         //await client.connect();
+//         await client.query('BEGIN');
+//         // remove the id column
+//         //let alteredHeaders = headers;
+//         //alteredHeaders.pop();
+//         let insertQuery = `INSERT INTO ` + TABLE + ` (${headers.join(', ')}) `;
+//         const selectedColumns = await transformColumns(headers);
+//         const selectQuery = `SELECT${selectedColumns} FROM ${STAGING}`;
+//         insertQuery += selectQuery;
+//         console.log('THE INSERT TABLE QUERY:', insertQuery);
+//         await client.query(insertQuery)
+//         await client.query('COMMIT');
+//         console.log('Data inserted successfully');
+//         const selectTableInfo = await client.query(`SELECT COUNT(*) as c, filename, load_id, date_upload, uploaded_by FROM ` + TABLE + ` where load_id = '` + UUID + `' GROUP BY filename, load_id, date_upload, uploaded_by`);
+//         const file = selectTableInfo.rows[0].filename;
+//         const load_id = selectTableInfo.rows[0].load_id;
+//         const date_upload = selectTableInfo.rows[0].date_upload;
+//         const uploaded_by = selectTableInfo.rows[0].uploaded_by; 
+//         const count = selectTableInfo.rows[0].c;
+//         mailOptions.subject = 'IMPORT: ' + TABLE;
+//         mailOptions.text = 'Data imported successfully.';
+//         mailOptions.html = 'Filename: ' + file + '<br><br>' +
+//                             'Load ID: ' + load_id + '<br><br>' +
+//                             'Date: ' + date_upload + '<br><br>' +
+//                             'Uploaded By:' + uploaded_by + '<br><br>' +
+//                             'Message: ' + mailOptions.text + ' Number of records: ' + count;
+//     } catch (error) {
+//         await client.query('ROLLBACK');
+//         await client.end();
+//         console.error('Error inserting data to table: ' + TABLE, error);
+//         console.log('Error inserting data to table: ' + TABLE, error);
+//         mailOptions.subject = 'IMPORT: ' + TABLE + ' error';
+//         mailOptions.text = 'Error importing data: ' + error;
+//         mailOptions.html = 'Filename: ' + file + '<br><br>' +
+//                             'Load ID: ' + UUID + '<br><br>' +
+//                             'Date: ' + DATE + '<br><br>' +
+//                             'Uploaded By:' + UPLOADED_BY + '<br><br>' +
+//                             'Message: ' + mailOptions.text;
+//     } finally {
+//         sendEmail(mailOptions);
+//         importDocuments(file);
+//     }
+// }
 
 async function importDocuments(file) {
     //await client.connect();
@@ -424,7 +433,7 @@ async function importDocuments(file) {
 // Read all files in the directory
 // Only files with a .csv extension will be processed
 fs.readdir(CSV_FILE_PATH, (err, files) => {
-    console.log('Reading csv directory ...');
+    console.log('Reading csv directory.', 'Date:', DATE);
     if (err) {
         return console.log('Unable to scan directory: ' + err);
     }
