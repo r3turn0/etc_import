@@ -134,7 +134,7 @@ async function insertStagingData(headers, data, file) {
                 row.load_id = uuid;
                 row.date_upload = DATE;
                 row.uploaded_by = UPLOADED_BY;
-                row.id = '';
+                row.running_id = '';
                 const values = Object.values(row).map((value, index) => `$${index + 1}`).join(', ');
                 const rowData = Object.values(row);
                 const insertQuery = `INSERT INTO ` + STAGING + ` (${headers.join(', ')}) VALUES (${values})`;
@@ -288,7 +288,7 @@ async function transformColumns(headers) {
                 }
                 else {
                     if(header === 'running_id') {
-                        headers[i] = ` CASE WHEN "id" IS NULL OR "id" = '' THEN nextval('etc.id_seq') ELSE "id"::INTEGER END`;
+                        headers[i] = ` CASE WHEN "running_id" IS NULL OR "running_id" = '' THEN nextval('etc.running_id_seq') ELSE "running_id"::INTEGER END`;
                     }
                     else {
                         headers[i] = ' ' + headers[i];
