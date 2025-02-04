@@ -76,7 +76,7 @@ async function parseCSV(file) {
             headerList.forEach(function(header) {
                 HEADERS.push(header.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '').toLowerCase())
             });
-            HEADERS.push('filename', 'load_id', 'date_upload', 'uploaded_by', 'id');
+            HEADERS.push('filename', 'load_id', 'date_upload', 'uploaded_by', 'running_id');
             console.log('Headers:', HEADERS);
         })
         .on('data', (row) => {
@@ -141,7 +141,7 @@ async function insertStagingData(headers, data, file) {
                 row.load_id = uuid;
                 row.date_upload = DATE;
                 row.uploaded_by = UPLOADED_BY;
-                row.id = '';
+                row.running_id = '';
                 const values = Object.values(row).map((value, index) => `$${index + 1}`).join(', ');
                 const rowData = Object.values(row);
                 const insertQuery = `INSERT INTO ` + STAGING + ` (${headers.join(', ')}) VALUES (${values})`;
