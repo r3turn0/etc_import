@@ -297,7 +297,7 @@ async function insertStagingData(headers, data, file) {
 //                 }
 //                 else {
 //                     if(header === 'id') {
-//                         headers[i] = ` CASE WHEN "id" IS NULL OR "id" = '' THEN nextval('etc.id_seq') ELSE "id"::INTEGER END`;
+//                         headers[i] = ` CASE WHEN "running_id" IS NULL OR "running_id" = '' THEN nextval('etc.running_id_seq') ELSE "running_id"::INTEGER END`;
 //                     }
 //                     else {
 //                         headers[i] = ' ' + headers[i];
