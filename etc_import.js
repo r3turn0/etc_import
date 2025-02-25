@@ -6,7 +6,8 @@ const nodemailer = require('nodemailer');
 require('dotenv').config();
 
 const DIRECTORY_PATH = process.argv[4]
-const CSV_FILE_PATH = path.join(__dirname, DIRECTORY_PATH);
+//const CSV_FILE_PATH = path.join(__dirname, DIRECTORY_PATH);
+const CSV_FILE_PATH = path.resolve(process.cwd(), DIRECTORY_PATH)
 let UUID = '';
 let HEADERS = [];
 const DATA = [];
@@ -15,6 +16,7 @@ const UPLOADED_BY = process.env.UPLOADED_BY;
 const STAGING = process.argv[2];
 const TABLE = process.argv[3];
 const DESTINATION_PATH = process.argv[5];
+const FINAL_DESTINATION = path.resolve(process.cwd(), DESTINATION_PATH);
 
 // Create a new client for PostgreSQL database
 const client = new Client({
@@ -92,7 +94,7 @@ async function createStagingTable(headers, data, file) {
         // If the table already exists truncate then insert the data
         if(result.rows[0].to_regclass) {
             // Truncate the table first
-            console.log('Truncating table: ', STAGING);
+            console.log('Truncating Table: ', STAGING);
             await client.query('TRUNCATE ' + STAGING + ' RESTART IDENTITY');
             insertStagingData(headers, data, file);
         }
@@ -362,17 +364,17 @@ async function importDocuments(file) {
     const uploaded_by = UPLOADED_BY;
     console.log('Uploading file:', fileName, 'Load ID:', load_id);
     try {
-        const getUserQuery = `SELECT uid FROM etc.user WHERE first_name LIKE $1 AND last_name LIKE $2`;
+        const getUserQuery = `SELECT user_id FROM etc.user WHERE first_name LIKE $1 AND last_name LIKE $2`;
         const resultUser = await client.query(getUserQuery, [firstName, lastName]);
-        const resultUserId = resultUser.rows[0].uid;
+        const resultUserId = resultUser.rows[0].user_id;
         console.log('User: ', resultUser, ' ID:', resultUserId);
-        const query = `INSERT INTO etc.upload (filename, date_upload, uid, uploaded_by, filepath, load_id) 
+        const query = `INSERT INTO etc.upload (filename, date_upload, user_id, uploaded_by, filepath, load_id) 
         VALUES ($1, $2, $3, $4, $5, $6)`;
-        const values = [file, date_upload, resultUserId, uploaded_by, DESTINATION_PATH + '\\' + file, load_id];
+        const values = [fileName, date_upload, resultUserId, uploaded_by, DESTINATION_PATH + '\\' + fileName, load_id];
         const results = await client.query(query, values);
         console.log('Document inserted: ', results);
         const subject = 'IMPORT etc.upload';
-        let text = 'Hello ' + firstName + ' ' + lastName + ' uid: ' + resultUserId + ', File load_id: ' + load_id + ' with filename: ' + fileName + ' was successfully imported into the etc.upload table on ' + date_upload + '. Regards, \n' + uploaded_by;
+        let text = 'Hello ' + firstName + ' ' + lastName + ' user_id: ' + resultUserId + ', File load_id: ' + load_id + ' with filename: ' + fileName + ' was successfully imported into the etc.upload table on ' + date_upload + '. Regards, \n' + uploaded_by;
         let html = '<h1>Uploaded File</h1><p>' + 
             text + '</p>' + 
             '<p> Load Id: ' + 
@@ -434,7 +436,7 @@ fs.readdir(CSV_FILE_PATH, (err, files) => {
             // call the function to process the csv file
             parseCSV(file);
             console.log(file, ' processed');
-            fs.copyFile(CSV_FILE_PATH + '\\' + file, DESTINATION_PATH + '\\' + file, function() {
+            fs.rename(CSV_FILE_PATH + '\\' + file, FINAL_DESTINATION + '\\' + file, function() {
                 console.log('File moved from', CSV_FILE_PATH + '\\' + file, 'to', DESTINATION_PATH + '\\' + file);
             });
         }
