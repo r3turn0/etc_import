@@ -69,7 +69,7 @@ async function parseCSV(file) {
         })
         .on('headers', (headerList) => {
             headerList.forEach(function(header) {
-                HEADERS.push(header.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '').toLowerCase())
+                HEADERS.push(header.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '_').toLowerCase())
             });
             HEADERS.push('filename', 'load_id', 'date_upload', 'uploaded_by', 'running_id');
             console.log('Headers:', HEADERS);
@@ -271,7 +271,10 @@ async function transformColumns(headers) {
             for(var i = 0; i < values.length; i++){
                 let value = values[i];
                 let header = results.fields[i].name;
-                if(value !== '' && value !== null) {
+                if(header.match(/name/) !== null) {
+                    headers[i] = ' ' + headers[i];
+                }
+                else if(value !== '' && value !== null) {
                     if (!isNaN(value)) {
                         if (Number(value) % 1 === 0) {
                             headers[i] = ` CASE WHEN ${headers[i]} = '' OR ${headers[i]} IS NULL THEN 0 ELSE ${headers[i]}::numeric END`;
@@ -281,7 +284,7 @@ async function transformColumns(headers) {
                     } else if (!isNaN(Date.parse(value))) {
                         headers[i] = ` CASE WHEN ${headers[i]} = '' OR ${headers[i]} IS NULL THEN NULL ELSE CAST(${headers[i]} AS TIMESTAMP) END`;
                     } else if (value.toLowerCase() === 'true' || value.toLowerCase() === 't' || value.toLowerCase() === 'false' || value.toLowerCase() === 'f') {
-                        headers[i] = ` CASE WHEN ${headers[i]} = '' OR ${headers[i]} IS NULL THEN CAST(${headers[i]} AS BOOLEAN) ELSE ${headers[i]}::boolean END`;
+                        headers[i] = ` CASE WHEN ${headers[i]} = '' OR ${headers[i]} IS NULL THEN NULL ELSE ${headers[i]}::boolean END`;
                     } else if (/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(value)) {
                         headers[i] = ` CAST(${headers[i]} AS UUID)`;
                     } else {
