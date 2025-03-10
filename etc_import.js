@@ -3,6 +3,7 @@ const path = require('path');
 const { Client } = require('pg');
 const csv = require('fast-csv');
 const nodemailer = require('nodemailer');
+const buffer = require('buffer');
 require('dotenv').config();
 
 const DIRECTORY_PATH = process.argv[4]
@@ -68,7 +69,14 @@ async function parseCSV(file) {
             console.log('Error parsing csv stream', error); 
         })
         .on('headers', (headerList) => {
+            let columnNumber = 1;
             headerList.forEach(function(header) {
+                let buf = buffer.Buffer;
+                let bufLength = buf.byteLength(header, 'utf8');
+                if(bufLength > 63) {
+                    header = 'Column ' + columnNumber + ' ' + (header.length > 40 ? header.substr(header.substr(header.length, -40), header.length) : header.substr(header.substr(header.length, 30), header.length));
+                    columnNumber++;
+                }
                 HEADERS.push(header.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '_').toLowerCase())
             });
             HEADERS.push('filename', 'load_id', 'date_upload', 'uploaded_by', 'running_id');
@@ -282,6 +290,7 @@ async function transformColumns(headers) {
                             headers[i] = ` CASE WHEN ${headers[i]} = '' OR ${headers[i]} IS NULL THEN 0.0 ELSE ${headers[i]}::float END`;
                         }
                     } else if (!isNaN(Date.parse(value))) {
+                        //headers[i] = ` CASE WHEN ${headers[i]} = '' OR ${headers[i]} IS NULL OR NOT (${headers[i]} ~ '^\\d{4}-\\d{2}-\\d{2}$') THEN NULL ELSE CAST(${headers[i]} AS TIMESTAMP) END`;
                         headers[i] = ` CASE WHEN ${headers[i]} = '' OR ${headers[i]} IS NULL THEN NULL ELSE CAST(${headers[i]} AS TIMESTAMP) END`;
                     } else if (value.toLowerCase() === 'true' || value.toLowerCase() === 't' || value.toLowerCase() === 'false' || value.toLowerCase() === 'f') {
                         headers[i] = ` CASE WHEN ${headers[i]} = '' OR ${headers[i]} IS NULL THEN NULL ELSE ${headers[i]}::boolean END`;
