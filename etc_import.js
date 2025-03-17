@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { Client } = require('pg');
-const csv = require('fast-csv');
+const csv = require('@fast-csv/parse');
 const nodemailer = require('nodemailer');
 const buffer = require('buffer');
 require('dotenv').config();
